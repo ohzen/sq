@@ -1,0 +1,79 @@
+#!/bin/env bash
+
+CACHE=${XDG_CACHE_HOME:-$HOME/.cache}
+SESSION_STORAGE=$CACHE/tmux-sessions
+
+session_name=`pwd`
+savedir=$SESSION_STORAGE$session_name
+socketdir=`pwd`/.tmux-socket
+
+function setup(){
+    . $SESSION_STORAGE/__setup__ \
+    || curl -sSL git.io/remote-setup > $SESSION_STORAGE/__setup__ \
+    && . $SESSION_STORAGE/__setup__
+}
+
+function _tmux(){
+    tmux -S $socketdir $@
+}
+
+function getpid(){
+    _tmux display-message -pF '#{pid}'
+}
+
+function session_name(){
+    _tmux display-message -p '#S'
+}
+
+function has-session {
+    _tmux has-session -t $session_name &> /dev/null
+}
+
+function create_session(){
+    echo "Creating new tmux session"
+    _tmux new -d -s $session_name
+    _tmux splitw -hbl 5 -t $session_name
+    _tmux resizep -L 100
+    _tmux send-keys -t $session_name "ranger" C-m
+    _tmux splitw -vfp 15 -t $session_name
+}
+
+function connect_session(){
+    if has-session ; then
+      echo "Session already exists, attaching"
+    else
+        create_session
+    fi
+    _tmux attach -t $session_name
+}
+
+function restore() {
+    sudo criu restore -d --images-dir $savedir
+}
+
+function get(){
+    mkdir -p $savedir \
+    && has-session \
+    || restore \
+    || create_session \
+    && connect_session
+}
+
+function set() {
+    #mv $savedir $savedir`date --iso-8601=seconds`.bkp || echo "nothing to backup"
+    rm -rf $savedir
+    mkdir -p $savedir
+    sudo criu dump --tree $(getpid) --images-dir $savedir
+    rm $socketdir
+    echo "session saved to $savedir. run 'sq restore' to reconnect"
+}
+
+function help() {
+    echo "available commands: get, set"
+}
+
+set -e
+set -u
+
+setup
+eval "$1"
