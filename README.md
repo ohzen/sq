@@ -10,4 +10,9 @@ Status Quo - Backup &amp; restore tmux sessions using CRIU!
 
 ### Prerequisites
 
+* CRIU
+* curl
+* tmux
+
+
 ## Usage
